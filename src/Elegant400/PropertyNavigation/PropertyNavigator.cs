@@ -56,7 +56,8 @@ namespace Elegant400.PropertyNavigation
       }
 
       private bool HasAttribute() =>
-        _iterator.Current is PropertyInfo && _iterator.CurrentProperty.GetCustomAttributes().Any();
+        _iterator.Current is PropertyInfo
+         && _iterator.CurrentProperty.GetCustomAttributes().OfType<ValidationAttribute>().Any();
 
       private void MakeProperty()
       {

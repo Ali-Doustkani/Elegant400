@@ -1,5 +1,6 @@
 ﻿using Elegant400.PropertyNavigation;
 using FluentAssertions;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
@@ -9,8 +10,11 @@ namespace Blog.Tests.Validation
 {
    public class PropertyNavigatorTests
    {
+      public class NotValidation : Attribute { }
+
       public class Flat1
       {
+         [NotValidation]
          [Required]
          [MaxLength(3)]
          public int First { get; set; }
@@ -227,6 +231,17 @@ namespace Blog.Tests.Validation
          var result = Read(model);
 
          result.Should().HaveCount(0);
+      }
+
+      [Fact]
+      public void Read_only_validation_attributes()
+      {
+         var result = Read(new Flat1());
+
+         result.Should().HaveCount(1);
+         result[0].Attributes.Should().HaveCount(2);
+         result[0].Attributes.ElementAt(0).Should().BeAssignableTo<RequiredAttribute>();
+         result[0].Attributes.ElementAt(1).Should().BeAssignableTo<MaxLengthAttribute>();
       }
    }
 }

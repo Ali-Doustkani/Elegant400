@@ -18,4 +18,9 @@
     <ProjectReference Include="..\Elegant400.Host\Elegant400.Host.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Validation\" />
+    <Folder Include="PropertyNavigation\" />
+  </ItemGroup>
+
 </Project>
