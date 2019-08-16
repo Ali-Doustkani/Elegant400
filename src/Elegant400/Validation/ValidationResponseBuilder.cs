@@ -1,10 +1,8 @@
 ﻿using Elegant400.PropertyNavigation;
 using Elegant400.Utils;
-using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
-using System.Reflection;
 
 namespace Elegant400.Validation
 {
@@ -34,23 +32,8 @@ namespace Elegant400.Validation
             return;
 
          if (!attrib.IsValid(property.Value))
-            _types.Add(new ValidationError(Map(attrib), property.Path, GetProperties(attrib)));
+            _types.Add(new ValidationError(Map(attrib), property.Path, PropertiesExtractor.Extract(attrib)));
       }
-
-      private Dictionary<string, object> GetProperties(ValidationAttribute attrib)
-      {
-         var result = new Dictionary<string, object>();
-         foreach (var prop in OwnPropertiesOf(attrib))
-         {
-            if (prop.Name.Equals("error", StringComparison.CurrentCultureIgnoreCase) || prop.Name.Equals("path", StringComparison.CurrentCultureIgnoreCase))
-               throw new InvalidOperationException("Error and Path are not valid names for properties.");
-            result.Add(prop.Name.ToCamelCase(), prop.GetValue(attrib));
-         }
-         return result;
-      }
-
-      private PropertyInfo[] OwnPropertiesOf(ValidationAttribute attrib) =>
-         attrib.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
 
       private string Map(ValidationAttribute attribute) =>
          attribute.GetType().Name.Replace("Attribute", "").ToCamelCase();
