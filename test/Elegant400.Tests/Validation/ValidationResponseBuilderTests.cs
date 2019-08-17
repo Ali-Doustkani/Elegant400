@@ -1,8 +1,14 @@
 ﻿using Elegant400.Validation;
 using FluentAssertions;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Metadata;
+using Moq;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Linq;
 using Xunit;
 
 namespace Blog.Tests.Validation
@@ -85,7 +91,7 @@ namespace Blog.Tests.Validation
       {
          var model = new RequiredModel { Summary = value };
 
-         builder.BuildFrom(model);
+         builder.BuildFromModel(model);
 
          builder.Invalid.Should().BeTrue();
          builder.Result.Errors.Should().ContainEquivalentOf(new
@@ -98,7 +104,7 @@ namespace Blog.Tests.Validation
       [Fact]
       public void Check_required_nullable_properties()
       {
-         builder.BuildFrom(new NullableModel { Value = null });
+         builder.BuildFromModel(new NullableModel { Value = null });
 
          builder.Invalid.Should().BeTrue();
          builder.Result.Errors.Should().ContainEquivalentOf(new
@@ -113,7 +119,7 @@ namespace Blog.Tests.Validation
       {
          var model = new RequiredModel { Summary = "text" };
 
-         builder.BuildFrom(model);
+         builder.BuildFromModel(model);
 
          builder.Invalid.Should().BeFalse();
          builder.Result.Should().BeNull();
@@ -127,7 +133,7 @@ namespace Blog.Tests.Validation
             Prop = new RequiredModel()
          };
 
-         builder.BuildFrom(model);
+         builder.BuildFromModel(model);
 
          builder.Invalid.Should().BeTrue();
          builder.Result.Errors.Should().ContainEquivalentOf(new
@@ -142,7 +148,7 @@ namespace Blog.Tests.Validation
       {
          var model = new RequiredModel { Summary = "text" };
 
-         builder.BuildFrom(model);
+         builder.BuildFromModel(model);
 
          builder.Invalid.Should().BeFalse();
          builder.Result.Should().BeNull();
@@ -151,7 +157,7 @@ namespace Blog.Tests.Validation
       [Fact]
       public void Check_empty_collections()
       {
-         builder.BuildFrom(new EmptyCollectionModel { Values = new string[] { } });
+         builder.BuildFromModel(new EmptyCollectionModel { Values = new string[] { } });
 
          builder.Invalid.Should().BeTrue();
          builder.Result.Errors.Should().BeEquivalentTo(new
@@ -164,7 +170,7 @@ namespace Blog.Tests.Validation
       [Fact]
       public void Check_min_length()
       {
-         builder.BuildFrom(new MinLengthModel { Name = "12" });
+         builder.BuildFromModel(new MinLengthModel { Name = "12" });
 
          builder.Invalid.Should().BeTrue();
          builder.Result.Errors.Should().BeEquivalentTo(new
@@ -178,7 +184,7 @@ namespace Blog.Tests.Validation
       [Fact]
       public void Throw_if_property_is_named_error()
       {
-         builder.Invoking(x => x.BuildFrom(new ErrorAttributeModel()))
+         builder.Invoking(x => x.BuildFromModel(new ErrorAttributeModel()))
             .Should()
             .Throw<InvalidOperationException>();
       }
@@ -186,9 +192,98 @@ namespace Blog.Tests.Validation
       [Fact]
       public void Throw_if_property_is_named_path()
       {
-         builder.Invoking(x => x.BuildFrom(new PathAttributeModel()))
+         builder.Invoking(x => x.BuildFromModel(new PathAttributeModel()))
             .Should()
             .Throw<InvalidOperationException>();
+      }
+
+      [Fact]
+      public void Build_from_model_state_for_integer_type()
+      {
+         var modelState = new Dictionary<string, ModelStateEntry>();
+         var entry = Mock.Of<ModelStateEntry>();
+         entry.Errors.Add(new JsonReaderException("Could not convert string to integer"));
+         modelState.Add("value", entry);
+         builder.BuildFromModelState(modelState);
+
+         builder.Invalid.Should().BeTrue();
+         builder.Result.Errors.Should().BeEquivalentTo(new
+         {
+            Error = "convert",
+            Path = new[] { "value" },
+            Properties = new Dictionary<string, object> { { "type", "integer" } }
+         });
+      }
+
+      [Fact]
+      public void Build_from_model_state_for_date_type()
+      {
+         var modelState = new Dictionary<string, ModelStateEntry>();
+         var entry = Mock.Of<ModelStateEntry>();
+         entry.Errors.Add(new JsonReaderException("Could not convert string to date"));
+         modelState.Add("value", entry);
+         builder.BuildFromModelState(modelState);
+
+         builder.Invalid.Should().BeTrue();
+         builder.Result.Errors.Should().BeEquivalentTo(new
+         {
+            Error = "convert",
+            Path = new[] { "value" },
+            Properties = new Dictionary<string, object> { { "type", "date" } }
+         });
+      }
+
+      [Fact]
+      public void Build_from_model_state_with_multiple_errors()
+      {
+         var modelState = new Dictionary<string, ModelStateEntry>();
+         var entry1 = Mock.Of<ModelStateEntry>();
+         entry1.Errors.Add(new JsonReaderException("Could not convert string to integer"));
+         modelState.Add("age", entry1);
+         var entry2 = Mock.Of<ModelStateEntry>();
+         entry2.Errors.Add(new JsonReaderException("Could not convert string to date"));
+         modelState.Add("startDate", entry2);
+         builder.BuildFromModelState(modelState);
+
+         builder.Invalid.Should().BeTrue();
+         builder.Result.Errors.Should().BeEquivalentTo(new[] {
+            new
+            {
+               Error = "convert",
+               Path = new[] {"age"},
+               Properties = new Dictionary<string, object> { { "type", "integer"} }
+            },
+            new
+            {
+               Error = "convert",
+               Path = new[]{"startDate" },
+               Properties = new Dictionary<string,object>{{"type", "date"}}
+            }
+         });
+      }
+
+      [Fact]
+      public void Process_keys_to_path()
+      {
+         var modelState = new Dictionary<string, ModelStateEntry>();
+         var entry = Mock.Of<ModelStateEntry>();
+         entry.Errors.Add(new JsonReaderException("Could not convert string to integer"));
+         modelState.Add("person.surname", entry);
+         builder.BuildFromModelState(modelState);
+
+         builder.Result.Errors.First().Path.Should().BeEquivalentTo(new[] { "person", "surname" });
+      }
+
+      [Fact]
+      public void Process_keys_containing_arrays()
+      {
+         var modelState = new Dictionary<string, ModelStateEntry>();
+         var entry = Mock.Of<ModelStateEntry>();
+         entry.Errors.Add(new JsonReaderException("Could not convert string to integer"));
+         modelState.Add("people[1].surname", entry);
+         builder.BuildFromModelState(modelState);
+
+         builder.Result.Errors.First().Path.Should().BeEquivalentTo(new object[] { "people", 1, "surname" });
       }
    }
 }
